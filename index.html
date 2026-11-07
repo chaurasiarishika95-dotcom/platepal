@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PlatePal – AI Food Picks</title>
+<style>
+:root{--bg:#fbf7f2;--card:#fff;--ink:#1f1a17;--muted:#6f655d;--line:#ece3d8;--brand:#e2552b;--brand2:#fbe7dd;--ok:#16794a;--okbg:#e3f4ea;--warn:#9a5b00;--warnbg:#fff1d6}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:#fff}
+.logo{width:36px;height:36px;border-radius:10px;background:var(--brand);color:#fff;display:grid;place-items:center;font-size:20px}
+header h1{font-size:18px;margin:0}header p{margin:0;color:var(--muted);font-size:13px}
+.help{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:999px;padding:7px 14px;cursor:pointer;font:inherit;font-size:13px}
+main{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:16px;padding:16px 20px;max-width:1200px;margin:0 auto}
+@media(max-width:820px){main{grid-template-columns:1fr;padding:12px 16px}.help span{display:none}}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px}
+#chat{display:flex;flex-direction:column;height:calc(100vh - 120px);min-height:520px}
+#log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.msg{max-width:88%;padding:10px 14px;border-radius:14px;white-space:pre-wrap}
+.bot{background:#f6efe7;align-self:flex-start;border-bottom-left-radius:4px}.me{background:var(--ink);color:#fff;align-self:flex-end;border-bottom-right-radius:4px}
+.picks{display:grid;gap:8px;align-self:stretch}
+.dish{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:#fff;display:flex;gap:12px;align-items:flex-start}
+.dish .ic{font-size:24px;width:40px;height:40px;border-radius:10px;background:var(--brand2);display:grid;place-items:center;flex:none}
+.dish b{display:block}.dish .meta{color:var(--muted);font-size:13px}.dish .why{font-size:12.5px;margin-top:4px;color:var(--ok)}
+.price{margin-left:auto;font-weight:700;white-space:nowrap}
+.chips{display:flex;flex-wrap:wrap;gap:8px;padding:10px 16px;border-top:1px solid var(--line)}
+.chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer}
+.chip:hover{border-color:var(--brand);color:var(--brand)}
+form{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--line)}
+input{flex:1;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font:inherit;background:#fff;min-width:0}
+button.send{background:var(--brand);color:#fff;border:0;border-radius:12px;padding:0 18px;font:inherit;font-weight:600;cursor:pointer}
+aside{display:flex;flex-direction:column;gap:16px}
+aside .panel{padding:14px 16px}aside h2{font-size:14px;margin:0 0 10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.pref{display:flex;flex-wrap:wrap;gap:6px}.tag{background:var(--brand2);color:#8a2f12;border-radius:999px;padding:4px 10px;font-size:13px}
+.tag.empty{background:#f2ede7;color:var(--muted)}
+ol.trail{margin:0;padding-left:18px;font-size:13.5px}ol.trail li{margin:4px 0}
+.relax{background:var(--warnbg);color:var(--warn);border-radius:8px;padding:6px 10px;font-size:13px;margin-top:8px}
+.status{font-size:12.5px;color:var(--muted)}.status b{color:var(--ink)}
+#helpbox{display:none;position:fixed;inset:0;background:#0006;z-index:5}#helpbox.open{display:block}
+#helpbox .in{background:#fff;max-width:440px;margin:60px auto;border-radius:16px;padding:20px;max-height:80vh;overflow:auto}
+#helpbox ul{padding-left:18px}.x{float:right;border:0;background:none;font-size:20px;cursor:pointer}
+footer{text-align:center;color:var(--muted);font-size:12px;padding:0 16px 16px}
+</style></head><body>
+<header><div class="logo">🍽</div><div><h1>PlatePal</h1><p>Tell me your budget and mood. I'll pick from the menu.</p></div>
+<button class="help" onclick="toggleHelp(true)">ⓘ <span>How to use</span></button></header>
+<main>
+<section class="panel" id="chat"><div id="log"></div>
+<div class="chips" id="chips"></div>
+<form id="f"><input id="q" placeholder="e.g. spicy veg dinner under ₹300" autocomplete="off"><button class="send">Send</button></form></section>
+<aside>
+<div class="panel"><h2>What I know about you</h2><div class="pref" id="prefs"></div></div>
+<div class="panel"><h2>How I picked</h2><ol class="trail" id="trail"><li>Waiting for your first request.</li></ol><div id="relax"></div></div>
+<div class="panel"><h2>Engine</h2><div class="status" id="status">Understanding: not used yet</div></div>
+</aside></main>
+<footer>Sample menu of 40 dishes from fictional restaurants. Prices are illustrative.</footer>
+<div id="helpbox" onclick="if(event.target===this)toggleHelp(false)"><div class="in"><button class="x" onclick="toggleHelp(false)">×</button>
+<h3>How to use PlatePal</h3><ul>
+<li>Say what you want in your own words: <i>"veg dinner for 2 under ₹500"</i>, <i>"something spicy, no nuts"</i>.</li>
+<li>Refine as you go: <i>"cheaper"</i>, <i>"less spicy"</i>, <i>"make it Chinese"</i>, <i>"I'm allergic to dairy"</i>.</li>
+<li>Say <i>"start over"</i> to clear your preferences.</li>
+<li>Diet, allergies and budget are never relaxed. If nothing fits, I'll tell you which softer preference I loosened.</li>
+<li>AI understands your request; fixed rules choose the dishes, so I only suggest dishes that are really on the menu.</li></ul></div></div>
+<script src="menu.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const CUISINES=["North Indian","Hyderabadi","South Indian","Chinese","Italian","Healthy","Street Food","Desserts"];
+const ALLERGENS=["dairy","nuts","gluten","egg","soy"];
+const SPICE={none:0,mild:1,medium:2,hot:3};
+const ICON={"North Indian":"🍛","Hyderabadi":"🍚","South Indian":"🥞","Chinese":"🥡","Italian":"🍕","Healthy":"🥗","Street Food":"🌯","Desserts":"🍨"};
+const blank=()=>({budget:null,people:1,diet:"any",cuisines:[],spice:null,avoid:[],keywords:[]});
+let P=blank(),lastShown=[],lastModel=null;
+
+function toggleHelp(o){$("helpbox").classList.toggle("open",o)}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")toggleHelp(false)});
+function add(cls,text){const d=document.createElement("div");d.className="msg "+cls;d.textContent=text;$("log").appendChild(d);$("log").scrollTop=1e9;return d}
+
+// ---------- Understanding: Gemini first, rule-based fallback ----------
+function prompt(text){return `You extract food-ordering preferences from a user message for a restaurant recommendation assistant.
+Current preferences: ${JSON.stringify(P)}
+User message: "${text}"
+Return ONLY JSON with these keys (use null or [] when not mentioned; do not invent):
+{"intent":"recommend|refine|reset|greeting|thanks|out_of_scope",
+ "budget_total":number|null, "people":number|null,
+ "diet":"veg|vegan|egg|nonveg|any"|null,
+ "cuisines":[subset of ${JSON.stringify(CUISINES)}],
+ "spice":"none|mild|medium|hot"|null,
+ "avoid_allergens":[subset of ${JSON.stringify(ALLERGENS)}],
+ "keywords":[short dish words like "biryani","paneer","pizza","healthy","light","dessert","breakfast","party"],
+ "change":"cheaper|spicier|milder"|null}
+Rules: "veg"/"vegetarian" -> veg. Mentioning chicken, mutton, fish or "non veg" -> nonveg. "Gluten free" -> avoid gluten. "Lactose intolerant" -> avoid dairy.
+Order tracking, refunds, complaints, payments or anything not about choosing food -> intent "out_of_scope". Hinglish is common: "sasta"=cheaper, "teekha"=spicy, "bina pyaz" is not an allergen.`}
+
+async function geminiUnderstand(text){
+  try{const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),9000);
+    const r=await fetch("/api/gemini",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prompt:prompt(text)}),signal:ctrl.signal});clearTimeout(t);
+    if(!r.ok)return null;const j=await r.json();lastModel=j.modelUsed+(j.tried&&j.tried.length?" (fallback)":"");return j.result||null}
+  catch(e){return null}
+}
+function ruleUnderstand(text){const n=text.toLowerCase();const o={intent:"recommend",budget_total:null,people:null,diet:null,cuisines:[],spice:null,avoid_allergens:[],keywords:[],change:null};
+  if(/start over|reset|clear|new search/.test(n))o.intent="reset";
+  else if(/^(hi|hello|hey|namaste)\b/.test(n)&&n.length<20)o.intent="greeting";
+  else if(/thank|thanks|shukriya/.test(n))o.intent="thanks";
+  if(/where is my order|order status|track|refund|complain|payment|cancel my order|late delivery/.test(n))o.intent="out_of_scope";
+  const b=n.match(/(?:under|below|within|budget|upto|up to|max|less than|₹|rs\.?|inr)\s*₹?\s*(\d{2,5})/)||n.match(/(\d{2,5})\s*(?:rs|rupees|₹|ke andar)/);if(b)o.budget_total=+b[1];
+  const p=n.match(/(?:for|serves?)\s*(\d{1,2})\s*(?:people|persons|ppl|of us|log)?/)||n.match(/(\d{1,2})\s*(?:people|persons|log)/);if(p)o.people=+p[1];
+  if(/\b(two of us|couple|date night)\b/.test(n))o.people=2;
+  if(/\bvegan\b/.test(n))o.diet="vegan";else if(/eggetarian|\begg\b/.test(n)&&!/no egg/.test(n))o.diet="egg";
+  else if(/non.?veg|chicken|mutton|fish|meat/.test(n))o.diet="nonveg";else if(/\bveg\b|vegetarian|shakahari/.test(n))o.diet="veg";
+  const cm={"north indian":"North Indian","punjabi":"North Indian","biryani":"Hyderabadi","hyderabadi":"Hyderabadi","south indian":"South Indian","dosa":"South Indian","chinese":"Chinese","noodles":"Chinese","momos":"Chinese","italian":"Italian","pizza":"Italian","pasta":"Italian","healthy":"Healthy","salad":"Healthy","street":"Street Food","chaat":"Street Food","dessert":"Desserts","sweet":"Desserts","meetha":"Desserts"};
+  for(const[k,v]of Object.entries(cm))if(n.includes(k)&&!o.cuisines.includes(v))o.cuisines.push(v);
+  if(/not spicy|no spice|less spicy|milder|kam teekha|mild/.test(n))o.spice=/not spicy|no spice/.test(n)?"none":"mild";else if(/very spicy|extra spicy|teekha|hot\b|spicy/.test(n))o.spice="hot";else if(/medium spic/.test(n))o.spice="medium";
+  if(/nut|peanut|cashew/.test(n)&&/allerg|no |without|free/.test(n))o.avoid_allergens.push("nuts");
+  if(/gluten/.test(n))o.avoid_allergens.push("gluten");
+  if(/lactose|dairy.?free|no dairy|allergic to dairy|no milk|no paneer/.test(n))o.avoid_allergens.push("dairy");
+  if(/no egg|egg allerg|allergic to egg/.test(n))o.avoid_allergens.push("egg");
+  if(/\bsoy\b/.test(n)&&/allerg|no |without|free/.test(n))o.avoid_allergens.push("soy");
+  for(const k of["biryani","paneer","pizza","pasta","dosa","idli","noodles","momos","salad","bowl","dal","roll","dessert","breakfast","light","protein","party","comfort","snack","chicken","mutton","rice","curry"])if(n.includes(k))o.keywords.push(k);
+  if(/cheaper|less expensive|sasta|budget friendly|lower price/.test(n))o.change="cheaper";
+  else if(/spicier|more spicy|zyada teekha/.test(n))o.change="spicier";else if(/less spicy|milder|kam teekha/.test(n))o.change="milder";
+  if(o.change&&o.intent==="recommend")o.intent="refine";
+  return o}
+
+function merge(u){
+  if(u.intent==="reset"){P=blank();return}
+  if(u.budget_total)P.budget=u.budget_total;if(u.people)P.people=u.people;
+  if(u.diet&&u.diet!=="any")P.diet=u.diet;
+  if(u.cuisines&&u.cuisines.length)P.cuisines=u.cuisines.filter(c=>CUISINES.includes(c));
+  if(u.spice)P.spice=u.spice;
+  (u.avoid_allergens||[]).forEach(a=>{if(ALLERGENS.includes(a)&&!P.avoid.includes(a))P.avoid.push(a)});
+  if(u.keywords&&u.keywords.length)P.keywords=u.keywords.map(k=>String(k).toLowerCase());
+  if(u.change==="cheaper"){const top=lastShown.length?Math.min(...lastShown.map(d=>cost(d))):null;P.budget=top?Math.max(50,Math.max(...lastShown.map(d=>cost(d)))-1):(P.budget?Math.round(P.budget*0.75):250)}
+  if(u.change==="spicier")P.spice=["none","mild","medium","hot"][Math.min(3,(SPICE[P.spice]??1)+1)];
+  if(u.change==="milder")P.spice=["none","mild","medium","hot"][Math.max(0,(SPICE[P.spice]??2)-1)];
+}
+
+// ---------- Rules: hard filters, soft preferences, ranking ----------
+const qty=d=>Math.ceil(P.people/d.serves);const cost=d=>qty(d)*d.price;
+function dietOK(d){if(P.diet==="vegan")return d.diet==="vegan";if(P.diet==="veg")return["veg","vegan"].includes(d.diet);if(P.diet==="egg")return["veg","vegan","egg"].includes(d.diet);return true}
+function hard(d){return dietOK(d)&&!d.allergens.some(a=>P.avoid.includes(a))&&(!P.budget||cost(d)<=P.budget)}
+function soft(d,relaxed){
+  if(!relaxed.has("cuisine")&&P.cuisines.length&&!P.cuisines.includes(d.cuisine))return false;
+  if(!relaxed.has("spice")&&P.spice!==null&&Math.abs(d.spice-SPICE[P.spice])>(P.spice==="none"?0:1))return false;
+  if(!relaxed.has("dish")&&P.keywords.length&&!P.keywords.some(k=>d.tags.includes(k)||d.name.toLowerCase().includes(k)))return false;
+  return true}
+function score(d){let s=d.rating;if(P.keywords.some(k=>d.tags.includes(k)||d.name.toLowerCase().includes(k)))s+=2;
+  if(P.spice!==null)s-=Math.abs(d.spice-SPICE[P.spice])*.5;if(P.diet==="nonveg"&&d.diet==="nonveg")s+=.7;return s}
+function pick(){const trail=[];const relaxed=new Set();
+  trail.push(`Hard rules: diet = ${P.diet}${P.avoid.length?", no "+P.avoid.join("/"):""}${P.budget?`, total ≤ ₹${P.budget} for ${P.people}`:""}.`);
+  let pool=MENU.filter(hard);trail.push(`${pool.length} of ${MENU.length} dishes pass the hard rules.`);
+  if(!pool.length){const near=MENU.filter(d=>dietOK(d)&&!d.allergens.some(a=>P.avoid.includes(a))).sort((a,b)=>((P.cuisines.includes(b.cuisine)?1:0)-(P.cuisines.includes(a.cuisine)?1:0))||cost(a)-cost(b)).slice(0,2);
+    trail.push("Nothing fits the budget, so I show the cheapest safe options.");return{list:near,trail,relaxed:["budget (showing closest over-budget options)"],overBudget:true}}
+  let hits=pool.filter(d=>soft(d,relaxed));
+  const isSet={dish:P.keywords.length>0,spice:P.spice!==null,cuisine:P.cuisines.length>0};
+  for(const r of["dish","spice","cuisine"]){if(hits.length)break;if(!isSet[r])continue;relaxed.add(r);hits=pool.filter(d=>soft(d,relaxed))}
+  const prefs=[P.cuisines.length&&`cuisine ${P.cuisines.join("/")}`,P.spice!==null&&`spice ${P.spice}`,P.keywords.length&&`dish ${P.keywords.join("/")}`].filter(Boolean);
+  if(prefs.length)trail.push(`Soft preferences: ${prefs.join(", ")} → ${hits.length} match.`);
+  hits.sort((a,b)=>score(b)-score(a));const out=[],seen=new Set();
+  for(const d of hits){if(out.length<3&&!seen.has(d.restaurant)){out.push(d);seen.add(d.restaurant)}}
+  for(const d of hits){if(out.length<3&&!out.includes(d))out.push(d)}
+  trail.push(`Ranked by rating and how well each dish matches; picked top ${out.length}, one per restaurant where possible.`);
+  return{list:out,trail,relaxed:[...relaxed].map(r=>({dish:"specific dish",spice:"spice level",cuisine:"cuisine"}[r]))}}
+
+// ---------- Reply ----------
+function whyLine(d){const w=[d.diet==="vegan"?"vegan":d.diet==="veg"?"veg":d.diet==="egg"?"contains egg":"non-veg",["no spice","mild","medium","spicy"][d.spice]];
+  if(P.avoid.length)w.push("no "+P.avoid.join("/"));if(P.budget)w.push(`fits ₹${P.budget}`);return w.join(" · ")}
+function showPicks(res){const wrap=document.createElement("div");wrap.className="picks";
+  res.list.forEach(d=>{const el=document.createElement("div");el.className="dish";
+    el.innerHTML=`<div class="ic">${ICON[d.cuisine]||"🍽"}</div><div><b></b><div class="meta"></div><div class="why"></div></div><div class="price"></div>`;
+    el.querySelector("b").textContent=d.name;el.querySelector(".meta").textContent=`${d.restaurant} · ${d.cuisine} · ★ ${d.rating} · ${d.prep} min`;
+    el.querySelector(".why").textContent="✓ "+whyLine(d);el.querySelector(".price").textContent=qty(d)>1?`${qty(d)} × ₹${d.price} = ₹${cost(d)}`:`₹${d.price}`;wrap.appendChild(el)});
+  $("log").appendChild(wrap);$("log").scrollTop=1e9}
+function render(res){
+  $("trail").innerHTML="";res.trail.forEach(t=>{const li=document.createElement("li");li.textContent=t;$("trail").appendChild(li)});
+  $("relax").innerHTML=res.relaxed.length?`<div class="relax">Loosened to find a match: ${res.relaxed.join(", ")}</div>`:"";
+  renderPrefs()}
+function renderPrefs(){const t=[];if(P.budget)t.push(`₹${P.budget} total`);t.push(`${P.people} ${P.people>1?"people":"person"}`);if(P.diet!=="any")t.push(P.diet);
+  P.cuisines.forEach(c=>t.push(c));if(P.spice!==null)t.push(`spice: ${P.spice}`);P.avoid.forEach(a=>t.push("no "+a));P.keywords.forEach(k=>t.push(k));
+  $("prefs").innerHTML=t.map(x=>`<span class="tag"></span>`).join("")||`<span class="tag empty">Nothing yet</span>`;[...$("prefs").children].forEach((c,i)=>{if(t[i])c.textContent=t[i]})}
+
+async function handle(text){if(!text.trim())return;add("me",text);
+  const thinking=add("bot","…");
+  let u=await geminiUnderstand(text);let mode="Gemini";
+  if(!u){u=ruleUnderstand(text);mode="rule-based fallback";lastModel=null}
+  thinking.remove();
+  $("status").innerHTML=`Understanding: <b>${mode}</b>${lastModel?` (${lastModel})`:""}<br>Choosing dishes: <b>fixed rules on the menu database</b>`;
+  if(u.intent==="out_of_scope"){add("bot","I can only help you choose what to eat. For order status, refunds or payment issues, please contact customer support and they'll sort it out.");return}
+  if(u.intent==="greeting"&&!u.budget_total&&!(u.cuisines||[]).length&&!u.diet){add("bot","Hi! Tell me your budget, how many people, and what you're in the mood for, and I'll suggest a few dishes.");return}
+  if(u.intent==="thanks"){add("bot","Enjoy your meal! Ask me again any time.");return}
+  merge(u);
+  if(u.intent==="reset"){lastShown=[];renderPrefs();$("trail").innerHTML="<li>Preferences cleared.</li>";$("relax").innerHTML="";add("bot","Done, I've cleared everything. What are you in the mood for?");return}
+  const res=pick();lastShown=res.list;render(res);
+  let lead=res.overBudget?`Nothing on the menu fits ₹${P.budget} for ${P.people}. These are the closest options that match your diet and allergies:`:
+    res.relaxed.length?`I couldn't match everything, so I loosened the ${res.relaxed.join(" and ")}. Here's what fits best:`:res.list.length===1?`Here's the best match:`:`Here are ${res.list.length} picks for you:`;
+  add("bot",lead);showPicks(res);
+  add("bot","Want it cheaper, spicier, a different cuisine, or should I avoid something?")}
+
+$("f").addEventListener("submit",e=>{e.preventDefault();const v=$("q").value;$("q").value="";handle(v)});
+["Veg dinner for 2 under ₹500","Something spicy, no nuts","Healthy lunch under ₹350","Cheaper","Make it Chinese","Start over"].forEach(c=>{const b=document.createElement("button");b.className="chip";b.type="button";b.textContent=c;b.onclick=()=>handle(c);$("chips").appendChild(b)});
+add("bot","Hi! I'm PlatePal. Tell me your budget, how many people, and what you feel like eating. For example: \"veg dinner for 2 under ₹500\".");renderPrefs();
+</script></body></html>
